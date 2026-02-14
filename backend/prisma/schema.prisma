@@ -1,0 +1,407 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model admins {
+  id          String    @id
+  permissions String      @default("{}")
+  last_login  DateTime?
+  created_at  DateTime? @default(now())
+  updated_at  DateTime? @default(now())
+  users       users     @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model audit_logs {
+  id           String    @id
+  performed_by String?
+  action       String
+  target_type  String?
+  target_id    String?
+  ip_address   String?
+  user_agent   String?
+  created_at   DateTime? @default(now())
+  users        users?    @relation(fields: [performed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model auth_tokens {
+  id            String    @id
+  user_id       String?
+  refresh_token String
+  user_agent    String?
+  ip_address    String?
+  expires_at    DateTime?
+  created_at    DateTime? @default(now())
+  users         users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model categories {
+  id               String       @id
+  name             String
+  description      String?
+  parent_id        String?
+  created_at       DateTime?    @default(now())
+  updated_at       DateTime?    @default(now())
+  categories       categories?  @relation("categoriesTocategories", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_categories categories[] @relation("categoriesTocategories")
+  items            items[]
+}
+
+model consultancy_bookings {
+  id                String    @id
+  user_id           String?
+  consultancy_type  String?
+  session_datetime  DateTime
+  status            String?   @default("booked")
+  created_at        DateTime? @default(now())
+  description       String?
+  custom_type       String?
+  phone_number      String?
+  payment_reference String?
+  payment_status    String?   @default("pending")
+  amount            Float?  @default(20000.00)
+  consultant_id     String?
+  duration_minutes  Int?      @default(60)
+  notes             String?
+  users             users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model daily_sales {
+  id            String    @id
+  date          DateTime  @unique
+  total_orders  Int       @default(0)
+  total_revenue Float   @default(0)
+  created_at    DateTime? @default(now())
+
+  @@index([date])
+}
+
+model delivery_addresses {
+  id           String    @id
+  user_id      String?
+  address      String
+  city         String?
+  state        String?
+  postal_code  String?
+  phone_number String?
+  is_primary   Boolean?  @default(false)
+  created_at   DateTime? @default(now())
+  users        users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders       orders[]
+}
+
+model email_verification_tokens {
+  id         String    @id
+  user_id    String?
+  token      String
+  purpose    String?
+  is_used    Boolean?  @default(false)
+  expires_at DateTime?
+  created_at DateTime? @default(now())
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model favorites {
+  id         String    @id
+  user_id    String?
+  item_id    String?
+  created_at DateTime? @default(now())
+  items      items?    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model inventory_history {
+  id                String    @id
+  item_id           String?
+  quantity_change   Int
+  previous_quantity Int
+  new_quantity      Int
+  reason            String
+  created_at        DateTime? @default(now())
+  items             items?    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([item_id])
+}
+
+model item_sales {
+  id            String    @id
+  item_id       String?
+  date          DateTime
+  quantity_sold Int       @default(0)
+  revenue       Float   @default(0)
+  created_at    DateTime? @default(now())
+  items         items?    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([item_id, date])
+  @@index([item_id, date])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model items {
+  id                  String                @id
+  name                String
+  description         String?
+  category_id         String?
+  type                item_type
+  price               Float
+  stock_quantity      Int                   @default(0)
+  low_stock_threshold Int                   @default(10)
+  status              item_status           @default(active)
+  expiry_date         DateTime?
+  created_at          DateTime?             @default(now())
+  updated_at          DateTime?             @default(now())
+  image_url           String?
+  favorites           favorites[]
+  inventory_history   inventory_history[]
+  item_sales          item_sales[]
+  categories          categories?           @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_items         order_items[]
+  ratings_and_reviews ratings_and_reviews[]
+  reviews             reviews[]
+
+  @@index([category_id])
+}
+
+model notifications {
+  id         String              @id
+  user_id    String?
+  type       notification_type
+  title      String
+  message    String
+  status     notification_status @default(unread)
+  created_at DateTime?           @default(now())
+  users      users?              @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([user_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model order_items {
+  id         String    @id
+  order_id   String?
+  item_id    String?
+  quantity   Int
+  unit_price Float
+  subtotal   Float
+  created_at DateTime? @default(now())
+  items      items?    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders     orders?   @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([item_id])
+  @@index([order_id])
+}
+
+model order_status_history {
+  id         String       @id
+  order_id   String?
+  status     order_status
+  notes      String?
+  created_at DateTime?    @default(now())
+  orders     orders?      @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model orders {
+  id                   String                 @id
+  user_id              String?
+  order_type           order_type
+  status               order_status           @default(pending)
+  total_amount         Float
+  payment_status       payment_status         @default(pending)
+  payment_reference    String?
+  notes                String?
+  delivery_address_id  String?
+  created_at           DateTime?              @default(now())
+  updated_at           DateTime?              @default(now())
+  order_items          order_items[]
+  order_status_history order_status_history[]
+  delivery_addresses   delivery_addresses?    @relation(fields: [delivery_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                users?                 @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refund_requests      refund_requests[]
+
+  @@index([status])
+  @@index([user_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ratings_and_reviews {
+  id         String    @id
+  user_id    String?
+  item_id    String?
+  rating     Int?
+  comment    String?
+  created_at DateTime? @default(now())
+  items      items?    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model refund_requests {
+  id         String    @id
+  order_id   String?
+  user_id    String?
+  reason     String?
+  status     String?   @default("pending")
+  created_at DateTime? @default(now())
+  orders     orders?   @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reviews {
+  id         String    @id
+  user_id    String?
+  item_id    String?
+  rating     Int
+  comment    String?
+  created_at DateTime? @default(now())
+  updated_at DateTime? @default(now())
+  items      items?    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([item_id])
+}
+
+model sessions {
+  id            String    @id
+  user_id       String?
+  refresh_token String
+  user_agent    String?
+  ip_address    String?
+  expires_at    DateTime?
+  created_at    DateTime? @default(now())
+  users         users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model users {
+  id                        String                      @id
+  email                     String                      @unique
+  password_hash             String
+  first_name                String
+  last_name                 String
+  phone_number              String?
+  role                      user_role                   @default(customer)
+  is_email_verified         Boolean?                    @default(false)
+  is_active                 Boolean?                    @default(true)
+  created_at                DateTime?                   @default(now())
+  updated_at                DateTime?                   @default(now())
+  admins                    admins?
+  audit_logs                audit_logs[]
+  auth_tokens               auth_tokens[]
+  consultancy_bookings      consultancy_bookings[]
+  delivery_addresses        delivery_addresses[]
+  email_verification_tokens email_verification_tokens[]
+  favorites                 favorites[]
+  notifications             notifications[]
+  orders                    orders[]
+  ratings_and_reviews       ratings_and_reviews[]
+  refund_requests           refund_requests[]
+  reviews                   reviews[]
+  sessions                  sessions[]
+
+  @@index([email])
+}
+
+enum ItemStatus {
+  active
+  inactive
+  out_of_stock
+}
+
+enum ItemType {
+  food
+  medicine
+}
+
+enum NotificationStatus {
+  unread
+  read
+}
+
+enum NotificationType {
+  order
+  system
+  promotion
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  preparing
+  ready
+  delivered
+  cancelled
+}
+
+enum OrderType {
+  dine_in
+  takeaway
+  delivery
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum UserRole {
+  admin
+  staff
+  customer
+}
+
+enum item_status {
+  active
+  inactive
+  out_of_stock
+}
+
+enum item_type {
+  food
+  medicine
+}
+
+enum notification_status {
+  unread
+  read
+}
+
+enum notification_type {
+  order
+  system
+  promotion
+}
+
+enum order_status {
+  pending
+  confirmed
+  preparing
+  ready
+  delivered
+  cancelled
+}
+
+enum order_type {
+  dine_in
+  takeaway
+  delivery
+}
+
+enum payment_status {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum user_role {
+  admin
+  staff
+  customer
+}
