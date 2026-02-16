@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, webContents } from 'electron';
 import { join, dirname } from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,14 +37,68 @@ const createWindow = () => {
         icon: iconPath,
         show: false, // Keep false initially to prevent flicker before maximize
         titleBarStyle: 'default',
-        autoHideMenuBar: true
+        autoHideMenuBar: true,
+        fullscreen: true // Start in fullscreen mode
     });
     // Maximize immediately if possible (though show: false keeps it hidden)
     mainWindow.maximize();
     if (mainWindow) {
         mainWindow.setMenuBarVisibility(false);
     }
-    // ... (existing code) ...
+    // Load the app URL
+    if (isDev && mainWindow) {
+        mainWindow.loadURL('http://localhost:5173');
+    }
+    else {
+        // Production mode - load from dist-web
+        let indexPath;
+        if (isPackaged) {
+            const possiblePaths = [
+                join(process.resourcesPath, 'app.asar/dist-web/index.html'),
+                join(process.resourcesPath, 'dist-web/index.html'),
+                join(__dirname, '../dist-web/index.html')
+            ];
+            indexPath = possiblePaths.find((p) => existsSync(p)) || possiblePaths[0];
+            console.log('🔍 Trying packaged paths:', possiblePaths);
+            console.log('📍 Selected path:', indexPath);
+        }
+        else {
+            indexPath = join(__dirname, '../dist-web/index.html');
+        }
+        if (existsSync(indexPath) && mainWindow) {
+            console.log('✅ Index file exists, attempting to load...');
+            mainWindow.loadFile(indexPath).catch((error) => {
+                console.error('❌ Failed to load file:', error);
+                const altPath = join(process.cwd(), 'dist-web/index.html');
+                if (existsSync(altPath) && mainWindow) {
+                    console.log('🔄 Trying alternative path...');
+                    mainWindow.loadFile(altPath);
+                }
+                else {
+                    console.error('❌ Could not find index.html in any expected location');
+                }
+            });
+        }
+        else {
+            console.error('❌ Index file does not exist at:', indexPath);
+            const altPath = join(process.cwd(), 'dist-web/index.html');
+            if (existsSync(altPath) && mainWindow) {
+                console.log('🔄 Trying alternative path...');
+                mainWindow.loadFile(altPath);
+            }
+            else {
+                console.error('❌ Could not find index.html in any expected location');
+                console.error('🔍 Current working directory:', process.cwd());
+                console.error('📁 Files in current directory:', readdirSync(process.cwd()));
+            }
+        }
+    }
+    // Add error logging for failed loads
+    if (mainWindow) {
+        mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+            console.error('Failed to load:', errorCode, errorDescription, validatedURL);
+        });
+    }
     mainWindow.once('ready-to-show', () => {
         if (mainWindow) {
             console.log('✅ ready-to-show event fired, maximizing and showing window...');

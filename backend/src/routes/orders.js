@@ -448,6 +448,17 @@ router.post('/create-cash-order', authenticateToken, async (req, res) => {
       });
     }
 
+    // Check stock availability for all items before creating order
+    const stockValidation = await validateStockAvailability(orderData.items);
+    
+    if (!stockValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Insufficient stock',
+        details: stockValidation.errors
+      });
+    }
+
     // Calculate total amount
     const totalAmount = orderData.items.reduce((sum, item) => {
       return sum + (item.quantity * item.price);

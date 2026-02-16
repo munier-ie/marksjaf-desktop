@@ -3,7 +3,7 @@
 import type React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { ShoppingCart, Printer, LogOut, User, Clock, Shield } from "lucide-react"
+import { ShoppingCart, LogOut, User, Clock, Shield } from "lucide-react"
 import { formatNigerianDateTime } from "../utils/datetime"
 
 const EntryPage: React.FC = () => {
@@ -15,9 +15,7 @@ const EntryPage: React.FC = () => {
     navigate("/pos/order")
   }
 
-  const handlePrinterClick = () => {
-    navigate("/printer/management")
-  }
+
 
   const handleAdminClick = () => {
     if (user?.role === "admin" || user?.role === "manager") {
@@ -70,7 +68,7 @@ const EntryPage: React.FC = () => {
           <p className="text-xl text-gray-600">Choose your workspace to get started</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {/* POS Card */}
           <div
             onClick={handlePOSClick}
@@ -93,27 +91,7 @@ const EntryPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Printer Management Card */}
-          <div
-            onClick={handlePrinterClick}
-            className="card hover:shadow-lg transition-all duration-200 cursor-pointer transform hover:scale-105 border-2 border-transparent hover:border-[#9ACD32]"
-          >
-            <div className="text-center">
-              <div className="mx-auto w-20 h-20 bg-[#9ACD32] rounded-full flex items-center justify-center mb-6">
-                <Printer className="h-10 w-10 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Printer Management</h2>
-              <p className="text-gray-600 mb-6">
-                Manage receipt printing, view recent receipts, and configure printing preferences for your POS system.
-              </p>
-              <div className="space-y-2 text-sm text-gray-500">
-                <p>• View Recent Receipts</p>
-                <p>• Reprint Past Orders</p>
-                <p>• Test Receipt Generation</p>
-                <p>• Printing Preferences</p>
-              </div>
-            </div>
-          </div>
+
 
           {/* Admin Card */}
           <div

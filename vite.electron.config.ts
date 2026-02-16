@@ -23,12 +23,20 @@ export default defineConfig({
         'events',
         'stream',
         'util',
-        'buffer'
-      ]
+        'buffer',
+        'fs'
+      ],
+      output: {
+        exports: 'auto',
+        interop: 'auto'
+      }
     },
     sourcemap: true,
     minify: false,
     target: 'node16',
-    ssr: true
+    ssr: true,
+    commonjsOptions: {
+      transformMixedEsModules: true
+    }
   }
 })

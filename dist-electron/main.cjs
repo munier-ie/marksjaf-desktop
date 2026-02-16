@@ -34,14 +34,19 @@ const createWindow = () => {
     },
     icon: iconPath,
     show: false,
+    // Keep false initially to prevent flicker before maximize
     titleBarStyle: "default",
-    autoHideMenuBar: true
+    autoHideMenuBar: true,
+    fullscreen: true
+    // Start in fullscreen mode
   });
+  mainWindow.maximize();
   if (mainWindow) {
     mainWindow.setMenuBarVisibility(false);
   }
   if (isDev && mainWindow) {
     mainWindow.loadURL("http://localhost:5173");
+    mainWindow.webContents.openDevTools();
   } else {
     let indexPath;
     if (isPackaged) {
@@ -56,7 +61,7 @@ const createWindow = () => {
     } else {
       indexPath = path.join(__dirname$1, "../dist-web/index.html");
     }
-    if (fs.existsSync(indexPath)) {
+    if (fs.existsSync(indexPath) && mainWindow) {
       console.log("✅ Index file exists, attempting to load...");
       mainWindow.loadFile(indexPath).catch((error) => {
         console.error("❌ Failed to load file:", error);
@@ -71,11 +76,9 @@ const createWindow = () => {
     } else {
       console.error("❌ Index file does not exist at:", indexPath);
       const altPath = path.join(process.cwd(), "dist-web/index.html");
-      if (fs.existsSync(altPath)) {
+      if (fs.existsSync(altPath) && mainWindow) {
         console.log("🔄 Trying alternative path...");
-        if (mainWindow) {
-          mainWindow.loadFile(altPath);
-        }
+        mainWindow.loadFile(altPath);
       } else {
         console.error("❌ Could not find index.html in any expected location");
         console.error("🔍 Current working directory:", process.cwd());
@@ -90,13 +93,15 @@ const createWindow = () => {
   }
   mainWindow.once("ready-to-show", () => {
     if (mainWindow) {
-      console.log("✅ ready-to-show event fired, showing window...");
+      console.log("✅ ready-to-show event fired, maximizing and showing window...");
+      mainWindow.maximize();
       mainWindow.show();
     }
   });
   setTimeout(() => {
     if (mainWindow && !mainWindow.isVisible()) {
       console.log("⏰ Timeout reached, showing window anyway...");
+      mainWindow.maximize();
       mainWindow.show();
     }
   }, 3e3);
@@ -123,18 +128,45 @@ const createWindow = () => {
 const startBackend = () => {
   let backendPath;
   let databasePath;
+  let uploadsDir;
   if (isDev) {
     backendPath = path.join(__dirname$1, "../backend/server.js");
     databasePath = path.join(__dirname$1, "../backend/prisma/database/marksjaf.db");
+    uploadsDir = path.join(__dirname$1, "../backend/uploads");
   } else if (isPackaged) {
     backendPath = path.join(process.resourcesPath, "backend/server.js");
-    const userDataPath = electron.app.getPath("userData");
-    databasePath = path.join(userDataPath, "database", "marksjaf.db");
-    const dbDir = path.join(userDataPath, "database");
-    if (!fs.existsSync(dbDir)) {
-      const fs2 = require("fs");
-      fs2.mkdirSync(dbDir, { recursive: true });
-      console.log("📁 Created database directory:", dbDir);
+    const exeDir = path.dirname(electron.app.getPath("exe"));
+    const portableDataDir = path.join(exeDir, "data");
+    let usePortable = false;
+    if (fs.existsSync(portableDataDir)) {
+      usePortable = true;
+      console.log("📂 Found local data directory, using portable mode");
+    } else {
+      try {
+        if (!exeDir.toLowerCase().includes("program files")) {
+          usePortable = true;
+        }
+      } catch (e) {
+        console.log("⚠️ Cannot check write access, defaulting to standard userData");
+      }
+    }
+    if (usePortable) {
+      const dbDir = path.join(portableDataDir, "database");
+      uploadsDir = path.join(portableDataDir, "uploads");
+      databasePath = path.join(dbDir, "marksjaf.db");
+      const fs$1 = require("fs");
+      if (!fs.existsSync(portableDataDir)) fs$1.mkdirSync(portableDataDir, { recursive: true });
+      if (!fs.existsSync(dbDir)) fs$1.mkdirSync(dbDir, { recursive: true });
+      if (!fs.existsSync(uploadsDir)) fs$1.mkdirSync(uploadsDir, { recursive: true });
+      console.log("🚀 Running in PORTABLE mode. Data path:", portableDataDir);
+    } else {
+      const userDataPath = electron.app.getPath("userData");
+      const dbDir = path.join(userDataPath, "database");
+      uploadsDir = path.join(userDataPath, "uploads");
+      databasePath = path.join(dbDir, "marksjaf.db");
+      const fs$1 = require("fs");
+      if (!fs.existsSync(dbDir)) fs$1.mkdirSync(dbDir, { recursive: true });
+      if (!fs.existsSync(uploadsDir)) fs$1.mkdirSync(uploadsDir, { recursive: true });
     }
     if (!fs.existsSync(databasePath)) {
       const initialDbPath = path.join(process.resourcesPath, "backend/prisma/database/marksjaf.db");
@@ -149,17 +181,12 @@ const startBackend = () => {
   } else {
     backendPath = path.join(__dirname$1, "../backend/server.js");
     databasePath = path.join(__dirname$1, "../backend/prisma/database/marksjaf.db");
+    uploadsDir = path.join(__dirname$1, "../backend/uploads");
   }
   console.log("Starting backend from:", backendPath);
   console.log("Database path:", databasePath);
+  console.log("Uploads path:", uploadsDir);
   const databaseUrl = `file:${databasePath.replace(/\\/g, "/")}`;
-  let uploadsDir;
-  if (isPackaged) {
-    const userDataPath = electron.app.getPath("userData");
-    uploadsDir = path.join(userDataPath, "uploads");
-  } else {
-    uploadsDir = path.join(__dirname$1, "../backend/uploads");
-  }
   backendProcess = child_process.spawn("node", [backendPath], {
     stdio: "inherit",
     windowsHide: true,

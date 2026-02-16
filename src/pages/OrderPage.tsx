@@ -12,6 +12,7 @@ interface MenuItem {
   id: string
   name: string
   price: number
+  stock_quantity: number
   description: string
   image_url?: string
   status: string
@@ -119,13 +120,20 @@ const OrderPage: React.FC = () => {
       return
     }
 
+    if (item.stock_quantity <= 0) {
+      toast.error('This item is out of stock')
+      return
+    }
+
     addToCart({
       id: item.id,
       name: item.name,
       price: Number(item.price),
       category: item.categories?.name || 'Uncategorized',
       description: item.description,
+      stock_quantity: item.stock_quantity
     })
+
 
     toast.success(`${item.name} added to cart`)
   }
@@ -275,12 +283,15 @@ const OrderPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-6">
             {filteredItems.map((item) => {
               const isAvailable = item.status === 'active'
+              const isOutOfStock = item.stock_quantity <= 0
+              const isLowStock = item.stock_quantity <= 5 && item.stock_quantity > 0
+
               return (
                 <div
                   key={item.id}
-                  className={`card hover:shadow-md transition-all duration-200 overflow-hidden ${!isAvailable ? "opacity-50" : "cursor-pointer hover:scale-105"
+                  className={`card hover:shadow-md transition-all duration-200 overflow-hidden ${!isAvailable || isOutOfStock ? "opacity-50" : "cursor-pointer hover:scale-105"
                     }`}
-                  onClick={() => isAvailable && handleAddToCart(item)}
+                  onClick={() => isAvailable && !isOutOfStock && handleAddToCart(item)}
                 >
                   <div className="flex gap-4">
                     {/* Image Section */}
@@ -314,13 +325,24 @@ const OrderPage: React.FC = () => {
                             {formatNairaSimple(Number(item.price))}
                           </p>
                         </div>
-                        <div className="ml-2 flex-shrink-0">
-                          {isAvailable ? (
-                            <Plus className="h-5 w-5 text-[#9ACD32]" />
-                          ) : (
-                            <span className="text-xs text-red-500 font-medium whitespace-nowrap">
-                              Unavailable
+                        <div className="ml-2 flex-shrink-0 flex flex-col items-end">
+                          {!isAvailable ? (
+                             <span className="text-xs text-red-500 font-medium whitespace-nowrap bg-red-50 px-2 py-1 rounded-full border border-red-100">
+                               Unavailable
+                             </span>
+                          ) : isOutOfStock ? (
+                            <span className="text-xs text-red-500 font-medium whitespace-nowrap bg-red-50 px-2 py-1 rounded-full border border-red-100">
+                              Out of Stock
                             </span>
+                          ) : (
+                            <div className="flex flex-col items-end gap-1">
+                               <Plus className="h-5 w-5 text-[#9ACD32]" />
+                               {isLowStock && (
+                                 <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full border border-orange-100 whitespace-nowrap">
+                                   {item.stock_quantity} left
+                                 </span>
+                               )}
+                            </div>
                           )}
                         </div>
                       </div>

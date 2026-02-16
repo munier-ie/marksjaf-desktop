@@ -195,7 +195,8 @@ const CheckoutPage: React.FC = () => {
                         <span className="w-8 text-center font-medium">{item.quantity}</span>
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="p-1 hover:bg-gray-200 rounded"
+                          className="p-1 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={item.quantity >= item.stock_quantity}
                         >
                           <Plus className="h-4 w-4" />
                         </button>

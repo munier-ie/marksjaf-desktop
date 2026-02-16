@@ -70,7 +70,7 @@ router.put('/transactions/:id/cancel', cancelTransaction);
 
 // Dashboard routes
 router.get('/dashboard/sales', getSalesReport);
-router.get('/dashboard/inventory', getInventoryAnalytics);
+// router.get('/dashboard/inventory', getInventoryAnalytics);
 router.get('/dashboard/export', exportDashboardAnalytics); // New route
 
 // Inventory Management Routes

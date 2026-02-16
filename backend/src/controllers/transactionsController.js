@@ -38,16 +38,6 @@ const getAllTransactions = async (req, res) => {
       where.order_type = orderType === 'dine-in' ? 'dine_in' : orderType;
     }
 
-    // Payment method filtering (stored in notes)
-    if (paymentMethod && paymentMethod !== 'all') {
-      // Create a case-insensitive search for the payment method in notes
-      // Common format is "Payment: Method"
-      where.notes = {
-        contains: paymentMethod,
-        mode: 'insensitive'
-      };
-    }
-
     if (startDate || endDate) {
       where.created_at = {};
       if (startDate) {
@@ -58,29 +48,57 @@ const getAllTransactions = async (req, res) => {
       }
     }
 
+    // Build search and payment method filters
+    // We need to handle these together to avoid Prisma query conflicts
+    const searchConditions = [];
+    
     // Search functionality
     if (search) {
       const searchNumber = parseFloat(search);
       const isNumber = !isNaN(searchNumber);
 
-      where.OR = [
-        { payment_reference: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
+      searchConditions.push(
+        { payment_reference: { contains: search } },
+        { notes: { contains: search } },
         {
           users: {
             OR: [
-              { first_name: { contains: search, mode: 'insensitive' } },
-              { last_name: { contains: search, mode: 'insensitive' } },
-              { email: { contains: search, mode: 'insensitive' } }
+              { first_name: { contains: search } },
+              { last_name: { contains: search } },
+              { email: { contains: search } }
             ]
           }
         }
-      ];
+      );
 
       // Add amount search if input is a valid number
       if (isNumber) {
-        where.OR.push({ total_amount: { equals: searchNumber } });
+        searchConditions.push({ total_amount: { equals: searchNumber } });
       }
+    }
+
+    // Payment method filtering (stored in notes)
+    // If we have both search and paymentMethod, we need to combine them with AND
+    if (paymentMethod && paymentMethod !== 'all') {
+      const paymentMethodCondition = {
+        notes: {
+          contains: paymentMethod
+        }
+      };
+
+      if (searchConditions.length > 0) {
+        // Combine search OR conditions with payment method using AND
+        where.AND = [
+          { OR: searchConditions },
+          paymentMethodCondition
+        ];
+      } else {
+        // Only payment method filter, no search
+        where.notes = paymentMethodCondition.notes;
+      }
+    } else if (searchConditions.length > 0) {
+      // Only search, no payment method filter
+      where.OR = searchConditions;
     }
 
     const [transactions, totalCount] = await Promise.all([
@@ -394,25 +412,44 @@ const exportTransactions = async (req, res) => {
       }
     }
 
-    if (paymentMethod && paymentMethod !== 'all') {
-      where.notes = { contains: paymentMethod, mode: 'insensitive' };
-    }
-
     if (startDate || endDate) {
       where.created_at = {};
       if (startDate) where.created_at.gte = new Date(startDate);
       if (endDate) where.created_at.lte = new Date(endDate + 'T23:59:59.999Z');
     }
 
+    // Build search and payment method filters (same logic as getAllTransactions)
+    const searchConditions = [];
+    
     if (search) {
       const searchNumber = parseFloat(search);
       const isNumber = !isNaN(searchNumber);
-      where.OR = [
-        { payment_reference: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
-        { users: { OR: [{ first_name: { contains: search, mode: 'insensitive' } }, { last_name: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } }
-      ];
-      if (isNumber) where.OR.push({ total_amount: { equals: searchNumber } });
+      
+      searchConditions.push(
+        { payment_reference: { contains: search } },
+        { notes: { contains: search } },
+        { users: { OR: [{ first_name: { contains: search } }, { last_name: { contains: search } }, { email: { contains: search } }] } }
+      );
+      
+      if (isNumber) searchConditions.push({ total_amount: { equals: searchNumber } });
+    }
+
+    // Handle payment method and search combination
+    if (paymentMethod && paymentMethod !== 'all') {
+      const paymentMethodCondition = {
+        notes: { contains: paymentMethod }
+      };
+
+      if (searchConditions.length > 0) {
+        where.AND = [
+          { OR: searchConditions },
+          paymentMethodCondition
+        ];
+      } else {
+        where.notes = paymentMethodCondition.notes;
+      }
+    } else if (searchConditions.length > 0) {
+      where.OR = searchConditions;
     }
 
     const transactions = await prisma.orders.findMany({

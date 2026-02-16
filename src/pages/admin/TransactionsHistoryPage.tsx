@@ -4,7 +4,7 @@ import type React from "react"
 import { useEffect } from 'react';
 import { useState } from "react"
 import AdminLayout from "../../components/AdminLayout"
-import { Search, Download, Eye, CreditCard, X, Trash2 } from "lucide-react"
+import { Search, Download, Eye, CreditCard, X, Trash2, Loader2 } from "lucide-react"
 import { formatNairaSimple } from "../../utils/currency"
 import { formatNigerianDateTime } from "../../utils/datetime"
 
@@ -39,6 +39,7 @@ interface TransactionStats {
 
 const TransactionsHistoryPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
@@ -56,11 +57,20 @@ const TransactionsHistoryPage: React.FC = () => {
     refunded: 0
   });
 
-  // Add useEffect to load data
+  // Debounce search term - wait 500ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Load data when filters change (including debounced search term)
   useEffect(() => {
     loadTransactions();
     loadTransactionStats();
-  }, [statusFilter, paymentFilter, dateFrom, dateTo, searchTerm]);
+  }, [statusFilter, paymentFilter, dateFrom, dateTo, debouncedSearchTerm]);
 
   const loadTransactions = async () => {
     try {
@@ -70,7 +80,7 @@ const TransactionsHistoryPage: React.FC = () => {
         paymentMethod: paymentFilter !== 'all' ? paymentFilter : undefined,
         startDate: dateFrom || undefined,
         endDate: dateTo || undefined,
-        search: searchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
       });
 
       if (response.success) {
@@ -192,17 +202,8 @@ const TransactionsHistoryPage: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <AdminLayout title="Transactions History" subtitle="View and manage all payment transactions">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500">Loading transactions...</div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  if (error) {
+  // Only show error state as full page, not loading
+  if (error && !loading) {
     return (
       <AdminLayout title="Transactions History" subtitle="View and manage all payment transactions">
         <div className="flex justify-center items-center h-64">
@@ -375,80 +376,91 @@ const TransactionsHistoryPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {transactions.map((transaction) => (
-                <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4">
-                    <div>
-                      <p className="font-medium text-gray-900">{transaction.orderNumber}</p>
-                      {transaction.staff && <p className="text-sm text-gray-600">Staff: {transaction.staff}</p>}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    {transaction.orderType === "dine-in" ? (
-                      <span className="font-medium">{transaction.tableNumber}</span>
-                    ) : (
-                      <span className="font-medium">{transaction.customerName}</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${getOrderTypeColor(transaction.orderType)}`}
-                    >
-                      {transaction.orderType}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 font-bold currency">{formatNairaSimple(transaction.amount)}</td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentMethodColor(transaction.paymentMethod)}`}
-                    >
-                      {transaction.paymentMethod.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}
-                    >
-                      {transaction.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm">{formatNigerianDateTime(transaction.timestamp)}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => setSelectedTransaction(transaction)}
-                        className="p-1 hover:bg-gray-200 rounded text-gray-600"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      {(transaction.status === 'pending') && (
-                        <>
-                          <button
-                            onClick={() => handleCancel(transaction.id)}
-                            className="p-1 hover:bg-red-100 rounded text-red-600"
-                            title="Cancel Transaction"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(transaction.id, transaction.orderNumber)}
-                            className="p-1 hover:bg-red-100 rounded text-red-600"
-                            title="Delete Transaction"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </>
-                      )}
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-16">
+                    <div className="flex flex-col items-center justify-center">
+                      <Loader2 className="h-8 w-8 text-[#9ACD32] animate-spin mb-2" />
+                      <p className="text-gray-500 text-sm">Loading transactions...</p>
                     </div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                transactions.map((transaction) => (
+                  <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div>
+                        <p className="font-medium text-gray-900">{transaction.orderNumber}</p>
+                        {transaction.staff && <p className="text-sm text-gray-600">Staff: {transaction.staff}</p>}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {transaction.orderType === "dine-in" ? (
+                        <span className="font-medium">{transaction.tableNumber}</span>
+                      ) : (
+                        <span className="font-medium">{transaction.customerName}</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getOrderTypeColor(transaction.orderType)}`}
+                      >
+                        {transaction.orderType}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-bold currency">{formatNairaSimple(transaction.amount)}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentMethodColor(transaction.paymentMethod)}`}
+                      >
+                        {transaction.paymentMethod.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}
+                      >
+                        {transaction.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm">{formatNigerianDateTime(transaction.timestamp)}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setSelectedTransaction(transaction)}
+                          className="p-1 hover:bg-gray-200 rounded text-gray-600"
+                          title="View Details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        {(transaction.status === 'pending') && (
+                          <>
+                            <button
+                              onClick={() => handleCancel(transaction.id)}
+                              className="p-1 hover:bg-red-100 rounded text-red-600"
+                              title="Cancel Transaction"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(transaction.id, transaction.orderNumber)}
+                              className="p-1 hover:bg-red-100 rounded text-red-600"
+                              title="Delete Transaction"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
-        {transactions.length === 0 && (
+        {!loading && transactions.length === 0 && (
           <div className="text-center py-8 text-gray-500">
             <p>No transactions found matching your criteria</p>
           </div>

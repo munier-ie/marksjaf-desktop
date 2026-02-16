@@ -289,18 +289,24 @@ router.post('/logout', async (req, res) => {
 // Helper function to log audit events
 async function logAuditEvent(userId, action, targetType, targetId, ipAddress, userAgent, details = null) {
   try {
-    await prisma.audit_logs.create({
-      data: {
-        id: generateUUID(), // Add this line
-        performed_by: userId,
-        action,
-        target_type: targetType,
-        target_id: targetId,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        details
-      }
-    });
+    const data = {
+      id: generateUUID(),
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      details
+    };
+
+    // Only add user relation if userId is provided
+    if (userId) {
+      data.users = {
+        connect: { id: userId }
+      };
+    }
+
+    await prisma.audit_logs.create({ data });
   } catch (error) {
     console.error('Audit log error:', error);
   }

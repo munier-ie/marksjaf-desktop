@@ -10,6 +10,7 @@ interface CartItem {
   category: string
   description: string
   quantity: number
+  stock_quantity: number
 }
 
 interface CartContextType {
@@ -60,6 +61,10 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     setCart((prev) => {
       const existing = prev.find((cartItem) => cartItem.id === item.id)
       if (existing) {
+        if (existing.quantity + 1 > existing.stock_quantity) {
+          // toast.error('Cannot add more items than available in stock') // Moved toast to UI component for cleaner context
+          return prev
+        }
         return prev.map((cartItem) =>
           cartItem.id === item.id ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem
         )
@@ -72,7 +77,15 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     if (quantity <= 0) {
       setCart((prev) => prev.filter((item) => item.id !== id))
     } else {
-      setCart((prev) => prev.map((item) => (item.id === id ? { ...item, quantity } : item)))
+      setCart((prev) => prev.map((item) => {
+        if (item.id === id) {
+           if (quantity > item.stock_quantity) {
+             return item // Do not update if exceeds stock
+           }
+           return { ...item, quantity }
+        }
+        return item
+      }))
     }
   }, [])
 

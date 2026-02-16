@@ -22,8 +22,9 @@ interface DashboardStats {
 
 interface SalesData {
   date: string;
-  orders: number;
-  revenue: number;
+  orderCount: number;
+  totalSales: number;
+  averageOrderValue: number;
 }
 
 interface InventoryStatus {
@@ -69,7 +70,7 @@ const AdminDashboardPage: React.FC = () => {
 
       try {
         salesResult = await dashboardAPI.getSalesAnalytics({ period: timeRange, limit: timeRange === 'daily' ? 7 : timeRange === 'weekly' ? 12 : timeRange === 'monthly' ? 12 : 5 });
-        if (salesResult.success) setSalesData(salesResult.data.salesData);
+        if (salesResult.success) setSalesData(salesResult.data);
       } catch (e) {
         console.error("Failed to load sales analytics", e);
       }
@@ -113,7 +114,7 @@ const AdminDashboardPage: React.FC = () => {
         })
 
         if (salesResponse.success) {
-          setSalesData(salesResponse.data.salesData)
+          setSalesData(salesResponse.data)
         }
       } catch (err) {
         console.error('Error fetching sales data:', err)
@@ -124,10 +125,10 @@ const AdminDashboardPage: React.FC = () => {
   }, [timeRange])
 
   // Calculate derived values from real data
-  const totalRevenue = salesData.reduce((sum, item) => sum + item.revenue, 0)
-  const totalOrders = salesData.reduce((sum, item) => sum + item.orders, 0)
+  const totalRevenue = (salesData || []).reduce((sum, item) => sum + item.totalSales, 0)
+  const totalOrders = (salesData || []).reduce((sum, item) => sum + item.orderCount, 0)
   const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
-  const maxRevenue = salesData.length > 0 ? Math.max(...salesData.map((item) => item.revenue)) : 1
+  const maxRevenue = (salesData || []).length > 0 ? Math.max(...(salesData || []).map((item) => item.totalSales)) : 1
 
   // Format period labels
   const formatPeriodLabel = (dateString: string, period: string) => {
@@ -138,11 +139,18 @@ const AdminDashboardPage: React.FC = () => {
       case 'weekly':
         // For weekly view, show relative week numbers starting from Week 1
         // Find the earliest date in salesData to use as Week 1
-        if (salesData.length > 0) {
-          const sortedDates = salesData.map(item => new Date(item.date)).sort((a, b) => a.getTime() - b.getTime())
-          const firstWeek = sortedDates[0]
+        if ((salesData || []).length > 0) {
+          const sortedDates = (salesData || []).map(item => new Date(item.date)).sort((a, b) => a.getTime() - b.getTime())
+          const firstWeek = new Date(sortedDates[0])
+          firstWeek.setHours(0, 0, 0, 0)
+          
           const currentDate = new Date(dateString)
-          const weeksDiff = Math.floor((currentDate.getTime() - firstWeek.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
+          currentDate.setHours(0, 0, 0, 0)
+          
+          const diffTime = Math.abs(currentDate.getTime() - firstWeek.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+          const weeksDiff = Math.floor(diffDays / 7) + 1
+          
           return `Week ${weeksDiff}`
         }
         return `Week 1`
@@ -306,7 +314,7 @@ const AdminDashboardPage: React.FC = () => {
                 <p className="text-sm text-gray-600">Revenue and orders over time</p>
               </div>
               <div className="flex space-x-2">
-                {(["daily", "weekly", "monthly", "yearly"] as const).map((range) => (
+                {(["daily", "monthly", "yearly"] as const).map((range) => (
                   <button
                     key={range}
                     onClick={() => setTimeRange(range)}
@@ -330,17 +338,17 @@ const AdminDashboardPage: React.FC = () => {
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-600">Revenue</span>
-                        <span className="text-sm font-medium currency">{formatNairaSimple(item.revenue)}</span>
+                        <span className="text-sm font-medium currency">{formatNairaSimple(item.totalSales)}</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className="bg-[#9ACD32] h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${maxRevenue > 0 ? (item.revenue / maxRevenue) * 100 : 0}%` }}
+                          style={{ width: `${maxRevenue > 0 ? (item.totalSales / maxRevenue) * 100 : 0}%` }}
                         ></div>
                       </div>
                     </div>
                     <div className="w-16 text-right">
-                      <span className="text-sm text-gray-600">{item.orders} orders</span>
+                      <span className="text-sm text-gray-600">{item.orderCount} orders</span>
                     </div>
                   </div>
                 ))
@@ -382,34 +390,34 @@ const AdminDashboardPage: React.FC = () => {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Total Items</span>
-                <span className="font-medium">{inventoryStatus?.summary.totalItems || 0}</span>
+                <span className="font-medium">{inventoryStatus?.summary?.totalItems || 0}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Low Stock Items</span>
-                <span className="font-medium text-red-600">{inventoryStatus?.summary.lowStockCount || 0}</span>
+                <span className="font-medium text-red-600">{inventoryStatus?.summary?.lowStockCount || 0}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Out of Stock</span>
-                <span className="font-medium text-red-600">{inventoryStatus?.summary.outOfStockCount || 0}</span>
+                <span className="font-medium text-red-600">{inventoryStatus?.summary?.outOfStockCount || 0}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">In Stock</span>
                 <span className="font-medium text-green-600">
-                  {(inventoryStatus?.summary.totalItems || 0) - (inventoryStatus?.summary.lowStockCount || 0) - (inventoryStatus?.summary.outOfStockCount || 0)}
+                  {(inventoryStatus?.summary?.totalItems || 0) - (inventoryStatus?.summary?.lowStockCount || 0) - (inventoryStatus?.summary?.outOfStockCount || 0)}
                 </span>
               </div>
             </div>
-            {(inventoryStatus?.summary.lowStockCount || 0) > 0 && (
+            {(inventoryStatus?.summary?.lowStockCount || 0) > 0 && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-800">
-                  <strong>{inventoryStatus?.summary.lowStockCount}</strong> items need restocking
+                  <strong>{inventoryStatus?.summary?.lowStockCount}</strong> items need restocking
                 </p>
               </div>
             )}
-            {(inventoryStatus?.summary.outOfStockCount || 0) > 0 && (
+            {(inventoryStatus?.summary?.outOfStockCount || 0) > 0 && (
               <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                 <p className="text-sm text-orange-800">
-                  <strong>{inventoryStatus?.summary.outOfStockCount}</strong> items are out of stock
+                  <strong>{inventoryStatus?.summary?.outOfStockCount}</strong> items are out of stock
                 </p>
               </div>
             )}

@@ -42,14 +42,22 @@ const getPeriodGrouping = (period) => {
 // Get sales report
 const getSalesReport = async (req, res) => {
   try {
-    const { startDate, endDate, period = 'daily' } = req.query;
-
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Start date and end date are required'
-      });
+    const { period = 'daily' } = req.query;
+    
+    // Default date logic based on period
+    let defaultStartDate = new Date();
+    if (period === 'yearly') {
+      defaultStartDate.setFullYear(defaultStartDate.getFullYear() - 5);
+    } else if (period === 'monthly') {
+      defaultStartDate.setMonth(defaultStartDate.getMonth() - 12);
+    } else if (period === 'weekly') {
+      defaultStartDate.setDate(defaultStartDate.getDate() - 90); // ~3 months
+    } else {
+      defaultStartDate.setDate(defaultStartDate.getDate() - 30);
     }
+
+    const startDate = req.query.startDate || defaultStartDate.toISOString().split('T')[0];
+    const endDate = req.query.endDate || new Date().toISOString().split('T')[0];
 
     const { start, end } = getDateRange(startDate, endDate);
 
@@ -90,6 +98,9 @@ const getSalesReport = async (req, res) => {
           break;
         case 'monthly':
           key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          break;
+        case 'yearly':
+          key = date.getFullYear().toString();
           break;
         default:
           key = date.toISOString().split('T')[0];
@@ -428,14 +439,11 @@ const getCustomerAnalytics = async (req, res) => {
 // Get inventory analytics
 const getInventoryAnalytics = async (req, res) => {
   try {
-    const { startDate, endDate, category } = req.query;
-
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Start date and end date are required'
-      });
-    }
+    const { category } = req.query;
+    
+    // Default to last 30 days if no dates provided
+    const startDate = req.query.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const endDate = req.query.endDate || new Date().toISOString().split('T')[0];
 
     const { start, end } = getDateRange(startDate, endDate);
 
@@ -456,7 +464,7 @@ const getInventoryAnalytics = async (req, res) => {
         },
         order_items: {
           where: {
-            order: {
+            orders: {
               created_at: {
                 gte: start,
                 lte: end
@@ -468,7 +476,7 @@ const getInventoryAnalytics = async (req, res) => {
           },
           select: {
             quantity: true,
-            price: true
+            unit_price: true
           }
         }
       }
@@ -477,7 +485,7 @@ const getInventoryAnalytics = async (req, res) => {
     // Calculate inventory metrics
     const inventoryMetrics = items.map(item => {
       const totalSold = item.order_items.reduce((sum, oi) => sum + oi.quantity, 0);
-      const revenue = item.order_items.reduce((sum, oi) => sum + (parseFloat(oi.price) * oi.quantity), 0);
+      const revenue = item.order_items.reduce((sum, oi) => sum + (parseFloat(oi.unit_price) * oi.quantity), 0);
       const turnoverRate = item.stock_quantity > 0 ? totalSold / item.stock_quantity : 0;
 
       return {
@@ -706,100 +714,169 @@ const getFinancialSummary = async (req, res) => {
 const exportDashboardAnalytics = async (req, res) => {
   try {
     const { format = 'xlsx' } = req.query;
-    // Default to last 30 days if no range provided, or use specific logic
+    // Default to last 30 days if no range provided
     const startDate = req.query.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const endDate = req.query.endDate || new Date().toISOString().split('T')[0];
 
-    // Reuse existing data fetching logic
-    // 1. Sales Data
-    // 1. Sales Data
-    const salesReq = { query: { startDate, endDate, period: 'daily' } };
-    const salesRes = {
-      json: (data) => data,
-      status: (code) => ({ json: (err) => ({ success: false, ...err }) })
-    };
-    const salesData = await new Promise(resolve => {
-      const result = getSalesReport(salesReq, salesRes);
-      if (result && typeof result.then === 'function') {
-        result.then(resolve);
-      } else {
-        resolve(result);
+    const { start, end } = getDateRange(startDate, endDate);
+
+    // Fetch all data directly from database
+    const [salesOrders, productItems, customers, financialOrders, refunds] = await Promise.all([
+      // Sales Data
+      prisma.orders.findMany({
+        where: {
+          created_at: { gte: start, lte: end },
+          status: { in: ['confirmed', 'delivered', 'ready'] }
+        },
+        select: {
+          created_at: true,
+          total_amount: true
+        }
+      }),
+
+      // Product Performance
+      prisma.order_items.findMany({
+        where: {
+          orders: {
+            created_at: { gte: start, lte: end },
+            status: { in: ['confirmed', 'delivered', 'ready'] }
+          }
+        },
+        include: {
+          items: {
+            include: {
+              categories: { select: { name: true } }
+            }
+          }
+        }
+      }),
+
+      // Customer Analytics
+      prisma.users.findMany({
+        where: {
+          role: 'customer',
+          created_at: { gte: start, lte: end }
+        },
+        include: {
+          orders: {
+            where: {
+              status: { in: ['confirmed', 'delivered', 'ready'] }
+            },
+            select: {
+              total_amount: true,
+              created_at: true
+            }
+          }
+        }
+      }),
+
+      // Financial - Revenue
+      prisma.orders.aggregate({
+        _sum: { total_amount: true },
+        where: {
+          created_at: { gte: start, lte: end },
+          status: { in: ['confirmed', 'delivered', 'ready'] }
+        }
+      }),
+
+      // Financial - Refunds
+      prisma.orders.aggregate({
+        _sum: { total_amount: true },
+        _count: { id: true },
+        where: {
+          created_at: { gte: start, lte: end },
+          status: 'cancelled'
+        }
+      })
+    ]);
+
+    // Process Sales Data - Group by date
+    const salesByDate = {};
+    salesOrders.forEach(order => {
+      const dateKey = order.created_at.toISOString().split('T')[0];
+      if (!salesByDate[dateKey]) {
+        salesByDate[dateKey] = {
+          date: dateKey,
+          totalSales: 0,
+          orderCount: 0,
+          averageOrderValue: 0
+        };
       }
+      salesByDate[dateKey].totalSales += parseFloat(order.total_amount);
+      salesByDate[dateKey].orderCount += 1;
     });
 
-    // 2. Product Performance
-    const productsReq = { query: { startDate, endDate, limit: 100 } };
-    const productsRes = {
-      json: (data) => data,
-      status: (code) => ({ json: (err) => ({ success: false, ...err }) })
-    };
-    const productsData = await new Promise(resolve => {
-      const result = getProductPerformance(productsReq, productsRes);
-      if (result && typeof result.then === 'function') {
-        result.then(resolve);
-      } else {
-        resolve(result);
-      }
+    // Calculate average order values
+    Object.keys(salesByDate).forEach(key => {
+      salesByDate[key].averageOrderValue = salesByDate[key].totalSales / salesByDate[key].orderCount;
     });
 
-    // 3. Customer Analytics
-    const customersReq = { query: { startDate, endDate } };
-    const customersRes = {
-      json: (data) => data,
-      status: (code) => ({ json: (err) => ({ success: false, ...err }) })
-    };
-    const customersData = await new Promise(resolve => {
-      const result = getCustomerAnalytics(customersReq, customersRes);
-      if (result && typeof result.then === 'function') {
-        result.then(resolve);
-      } else {
-        resolve(result);
+    const salesData = Object.values(salesByDate).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Process Product Performance
+    const productPerformance = {};
+    productItems.forEach(orderItem => {
+      const item = orderItem.items;
+      if (!productPerformance[item.id]) {
+        productPerformance[item.id] = {
+          name: item.name,
+          category: item.categories?.name || 'Uncategorized',
+          totalSold: 0,
+          revenue: 0
+        };
       }
+      productPerformance[item.id].totalSold += orderItem.quantity;
+      productPerformance[item.id].revenue += parseFloat(orderItem.price) * orderItem.quantity;
     });
 
-    // 4. Financial Summary
-    const financialReq = { query: { startDate, endDate } };
-    const financialRes = {
-      json: (data) => data,
-      status: (code) => ({ json: (err) => ({ success: false, ...err }) })
-    };
-    const financialData = await new Promise(resolve => {
-      const result = getFinancialSummary(financialReq, financialRes);
-      if (result && typeof result.then === 'function') {
-        result.then(resolve);
-      } else {
-        resolve(result);
-      }
-    });
+    const productsData = Object.values(productPerformance)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 100);
+
+    // Process Customer Analytics
+    const customersData = customers.map(customer => {
+      const totalSpent = customer.orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
+      const orderCount = customer.orders.length;
+      return {
+        name: `${customer.first_name} ${customer.last_name}`,
+        email: customer.email,
+        totalSpent,
+        orderCount
+      };
+    }).sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 50);
 
     // Prepare Data Sets
     const datasets = {
-      Sales: (salesData.data || []).map(s => ({
+      Sales: salesData.map(s => ({
         Date: s.date,
-        'Total Sales': s.totalSales,
+        'Total Sales': s.totalSales.toFixed(2),
         'Order Count': s.orderCount,
-        'Avg Value': s.averageOrderValue
+        'Avg Value': s.averageOrderValue.toFixed(2)
       })),
-      Products: (productsData.data || []).map(p => ({
+      Products: productsData.map(p => ({
         Product: p.name,
         Category: p.category,
         Sold: p.totalSold,
-        Revenue: p.revenue
+        Revenue: p.revenue.toFixed(2)
       })),
-      Customers: (customersData.data || []).map(c => ({
+      Customers: customersData.map(c => ({
         Name: c.name,
         Email: c.email,
-        'Total Spent': c.totalSpent,
+        'Total Spent': c.totalSpent.toFixed(2),
         'Orders': c.orderCount
       })),
       Financials: [{
-        Metric: 'Total Revenue', Value: financialData.data?.totalRevenue
+        Metric: 'Total Revenue',
+        Value: (parseFloat(financialOrders._sum.total_amount || 0)).toFixed(2)
       }, {
-        Metric: 'Net Revenue', Value: financialData.data?.netRevenue
+        Metric: 'Net Revenue',
+        Value: (parseFloat(financialOrders._sum.total_amount || 0) - parseFloat(refunds._sum.total_amount || 0)).toFixed(2)
       }, {
-        Metric: 'Refunds Amount', Value: financialData.data?.refunds?.amount
+        Metric: 'Refunds Amount',
+        Value: (parseFloat(refunds._sum.total_amount || 0)).toFixed(2)
       }, {
-        Metric: 'Refunds Count', Value: financialData.data?.refunds?.count
+        Metric: 'Refunds Count',
+        Value: refunds._count.id
       }]
     };
 
@@ -839,8 +916,7 @@ const exportDashboardAnalytics = async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="dashboard-analytics-${startDate}-${endDate}.txt"`);
       res.send(content);
     } else {
-      // CSV - Combine meaningful summaries or just Sales
-      // For dashboard "CSV", typically users want the main sales data
+      // CSV - Sales data
       const headers = ['Date', 'Total Sales', 'Order Count', 'Avg Value'];
       const csvContent = [
         headers.join(','),
@@ -854,7 +930,7 @@ const exportDashboardAnalytics = async (req, res) => {
 
   } catch (error) {
     console.error('Error exporting dashboard:', error);
-    res.status(500).json({ success: false, message: 'Failed to export dashboard' });
+    res.status(500).json({ success: false, message: 'Failed to export dashboard', error: error.message });
   }
 };
 
