@@ -17,6 +17,7 @@ dist-ssr
 *.local
 *disk*
 scripts
+receipts
 
 # Editor directories and files
 .vscode/*
