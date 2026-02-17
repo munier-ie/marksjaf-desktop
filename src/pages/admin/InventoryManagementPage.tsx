@@ -8,6 +8,7 @@ import { formatNairaSimple } from "../../utils/currency"
 import { inventoryAPI } from "../../services/api"
 import { toast } from 'sonner'
 import LocalImageUpload from '../../components/LocalImageUpload'
+import { sampleCategories } from '../../services/sampleData'
 
 interface MenuItem {
   id: string
@@ -439,7 +440,6 @@ const InventoryManagementPage: React.FC = () => {
       {(showAddModal || editingItem) && (
         <ItemModal
           item={editingItem}
-          categories={categories}
           onSave={editingItem ? handleEditItem : handleAddItem}
           onClose={() => {
             setShowAddModal(false)
@@ -454,12 +454,11 @@ const InventoryManagementPage: React.FC = () => {
 // Item Modal Component
 interface ItemModalProps {
   item?: MenuItem | null
-  categories: Category[]
   onSave: (item: any) => void
   onClose: () => void
 }
 
-const ItemModal: React.FC<ItemModalProps> = ({ item, categories, onSave, onClose }) => {
+const ItemModal: React.FC<ItemModalProps> = ({ item, onSave, onClose }) => {
   const [formData, setFormData] = useState({
     name: item?.name || "",
     description: item?.description || "",
@@ -531,7 +530,7 @@ const ItemModal: React.FC<ItemModalProps> = ({ item, categories, onSave, onClose
                 className="input-field"
               >
                 <option value="">Select Category</option>
-                {categories.map((category) => (
+                {sampleCategories.map((category) => (
                   <option key={category.id} value={category.name}>
                     {category.name}
                   </option>
