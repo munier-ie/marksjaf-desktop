@@ -6,12 +6,12 @@
   "version": "1.0.0",
   "author": "MARKSJAF Kitchen",
   "type": "module",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main.cjs",
   "homepage": "./",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:electron": "tsc --project tsconfig.electron.json",
+    "build:electron": "vite build -c vite.electron.config.ts",
     "build:all": "npm run build && npm run build:electron",
     "pack": "npm run build:all && electron-builder --dir",
     "dist": "npm run build:all && electron-builder",
@@ -81,7 +81,6 @@
     "files": [
       "dist-web/**/*",
       "dist-electron/**/*",
-      "backend/**/*",
       "public/marksjaf-logo.png"
     ],
     "extraResources": [
@@ -90,16 +89,17 @@
         "to": "backend",
         "filter": [
           "**/*",
-          "!node_modules/.cache/**/*"
+          "!node_modules/**/*",
+          "!node_modules"
         ]
       },
       {
-        "from": "backend/node_modules/.prisma",
-        "to": "backend/node_modules/.prisma"
-      },
-      {
-        "from": "backend/node_modules/@prisma/client",
-        "to": "backend/node_modules/@prisma/client"
+        "from": "backend/node_modules",
+        "to": "backend/node_modules",
+        "filter": [
+          "**/*",
+          "!.cache/**/*"
+        ]
       },
       {
         "from": "public",
@@ -110,8 +110,7 @@
       }
     ],
     "asarUnpack": [
-      "public/**/*",
-      "backend/**/*"
+      "public/**/*"
     ],
     "mac": {
       "category": "public.app-category.business",

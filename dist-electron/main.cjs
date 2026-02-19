@@ -16,7 +16,10 @@ const createWindow = () => {
   if (isDev) {
     iconPath = path.join(__dirname$1, "../public/marksjaf-logo.png");
   } else if (isPackaged) {
-    iconPath = path.join(process.resourcesPath, "app.asar.unpacked/public/marksjaf-logo.png");
+    iconPath = path.join(
+      process.resourcesPath,
+      "app.asar.unpacked/public/marksjaf-logo.png"
+    );
   } else {
     iconPath = path.join(__dirname$1, "../public/marksjaf-logo.png");
   }
@@ -46,7 +49,6 @@ const createWindow = () => {
   }
   if (isDev && mainWindow) {
     mainWindow.loadURL("http://localhost:5173");
-    mainWindow.webContents.openDevTools();
   } else {
     let indexPath;
     if (isPackaged) {
@@ -70,7 +72,9 @@ const createWindow = () => {
           console.log("🔄 Trying alternative path...");
           mainWindow.loadFile(altPath);
         } else {
-          console.error("❌ Could not find index.html in any expected location");
+          console.error(
+            "❌ Could not find index.html in any expected location"
+          );
         }
       });
     } else {
@@ -82,18 +86,31 @@ const createWindow = () => {
       } else {
         console.error("❌ Could not find index.html in any expected location");
         console.error("🔍 Current working directory:", process.cwd());
-        console.error("📁 Files in current directory:", fs.readdirSync(process.cwd()));
+        console.error(
+          "📁 Files in current directory:",
+          fs.readdirSync(process.cwd())
+        );
       }
     }
   }
   if (mainWindow) {
-    mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
-      console.error("Failed to load:", errorCode, errorDescription, validatedURL);
-    });
+    mainWindow.webContents.on(
+      "did-fail-load",
+      (event, errorCode, errorDescription, validatedURL) => {
+        console.error(
+          "Failed to load:",
+          errorCode,
+          errorDescription,
+          validatedURL
+        );
+      }
+    );
   }
   mainWindow.once("ready-to-show", () => {
     if (mainWindow) {
-      console.log("✅ ready-to-show event fired, maximizing and showing window...");
+      console.log(
+        "✅ ready-to-show event fired, maximizing and showing window..."
+      );
       mainWindow.maximize();
       mainWindow.show();
     }
@@ -147,29 +164,37 @@ const startBackend = () => {
           usePortable = true;
         }
       } catch (e) {
-        console.log("⚠️ Cannot check write access, defaulting to standard userData");
+        console.log(
+          "⚠️ Cannot check write access, defaulting to standard userData"
+        );
       }
     }
     if (usePortable) {
       const dbDir = path.join(portableDataDir, "database");
       uploadsDir = path.join(portableDataDir, "uploads");
       databasePath = path.join(dbDir, "marksjaf.db");
-      const fs$1 = require("fs");
-      if (!fs.existsSync(portableDataDir)) fs$1.mkdirSync(portableDataDir, { recursive: true });
-      if (!fs.existsSync(dbDir)) fs$1.mkdirSync(dbDir, { recursive: true });
-      if (!fs.existsSync(uploadsDir)) fs$1.mkdirSync(uploadsDir, { recursive: true });
+      const fs2 = require("fs");
+      if (!fs.existsSync(portableDataDir))
+        fs2.mkdirSync(portableDataDir, { recursive: true });
+      if (!fs.existsSync(dbDir)) fs2.mkdirSync(dbDir, { recursive: true });
+      if (!fs.existsSync(uploadsDir))
+        fs2.mkdirSync(uploadsDir, { recursive: true });
       console.log("🚀 Running in PORTABLE mode. Data path:", portableDataDir);
     } else {
       const userDataPath = electron.app.getPath("userData");
       const dbDir = path.join(userDataPath, "database");
       uploadsDir = path.join(userDataPath, "uploads");
       databasePath = path.join(dbDir, "marksjaf.db");
-      const fs$1 = require("fs");
-      if (!fs.existsSync(dbDir)) fs$1.mkdirSync(dbDir, { recursive: true });
-      if (!fs.existsSync(uploadsDir)) fs$1.mkdirSync(uploadsDir, { recursive: true });
+      const fs2 = require("fs");
+      if (!fs.existsSync(dbDir)) fs2.mkdirSync(dbDir, { recursive: true });
+      if (!fs.existsSync(uploadsDir))
+        fs2.mkdirSync(uploadsDir, { recursive: true });
     }
     if (!fs.existsSync(databasePath)) {
-      const initialDbPath = path.join(process.resourcesPath, "backend/prisma/database/marksjaf.db");
+      const initialDbPath = path.join(
+        process.resourcesPath,
+        "backend/prisma/database/marksjaf.db"
+      );
       if (fs.existsSync(initialDbPath)) {
         const fs2 = require("fs");
         fs2.copyFileSync(initialDbPath, databasePath);
@@ -187,23 +212,78 @@ const startBackend = () => {
   console.log("Database path:", databasePath);
   console.log("Uploads path:", uploadsDir);
   const databaseUrl = `file:${databasePath.replace(/\\/g, "/")}`;
+  const backendDir = isDev ? path.join(__dirname$1, "../backend") : isPackaged ? path.join(process.resourcesPath, "backend") : path.join(__dirname$1, "../backend");
+  const prismaEnginePath = isPackaged ? path.join(
+    process.resourcesPath,
+    "backend/node_modules/.prisma/client/query_engine-windows.dll.node"
+  ) : void 0;
+  const fs$1 = require("fs");
+  const logDir = isPackaged ? path.join(electron.app.getPath("userData"), "logs") : path.join(__dirname$1, "../logs");
+  if (!fs.existsSync(logDir)) fs$1.mkdirSync(logDir, { recursive: true });
+  const logFile = path.join(logDir, "backend.log");
+  const logStream = fs$1.createWriteStream(logFile, { flags: "w" });
+  const logMsg = [
+    `[${(/* @__PURE__ */ new Date()).toISOString()}] Backend startup diagnostics:`,
+    `  backendPath: ${backendPath}`,
+    `  backendDir (cwd): ${backendDir}`,
+    `  databaseUrl: ${databaseUrl}`,
+    `  uploadsDir: ${uploadsDir}`,
+    `  isPackaged: ${isPackaged}`,
+    `  isDev: ${isDev}`,
+    `  backendPath exists: ${fs.existsSync(backendPath)}`,
+    `  backendDir exists: ${fs.existsSync(backendDir)}`,
+    `  prismaEnginePath: ${prismaEnginePath || "N/A"}`,
+    `  prisma engine exists: ${prismaEnginePath ? fs.existsSync(prismaEnginePath) : "N/A"}`,
+    `  .prisma/client dir exists: ${fs.existsSync(path.join(backendDir, "node_modules/.prisma/client"))}`,
+    `  @prisma/client dir exists: ${fs.existsSync(path.join(backendDir, "node_modules/@prisma/client"))}`,
+    `  schema.prisma exists: ${fs.existsSync(path.join(backendDir, "node_modules/.prisma/client/schema.prisma"))}`,
+    `  process.resourcesPath: ${process.resourcesPath || "N/A"}`,
+    ""
+  ].join("\n");
+  logStream.write(logMsg);
+  console.log(logMsg);
+  console.log("📝 Backend log file:", logFile);
   backendProcess = child_process.spawn("node", [backendPath], {
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
     // Hide console window on Windows
+    cwd: backendDir,
+    // Set cwd so Prisma can resolve its engine via process.cwd()
     env: {
       ...process.env,
       NODE_ENV: isDev ? "development" : "production",
       DATABASE_URL: databaseUrl,
       UPLOADS_DIR: uploadsDir,
-      IS_PACKAGED: isPackaged ? "true" : "false"
+      IS_PACKAGED: isPackaged ? "true" : "false",
+      ...prismaEnginePath ? { PRISMA_QUERY_ENGINE_LIBRARY: prismaEnginePath } : {}
     }
   });
+  if (backendProcess.stdout) {
+    backendProcess.stdout.on("data", (data) => {
+      const text = data.toString();
+      logStream.write(text);
+      console.log("[backend]", text.trim());
+    });
+  }
+  if (backendProcess.stderr) {
+    backendProcess.stderr.on("data", (data) => {
+      const text = data.toString();
+      logStream.write(`[STDERR] ${text}`);
+      console.error("[backend-err]", text.trim());
+    });
+  }
   backendProcess.on("error", (error) => {
-    console.error("Backend process error:", error);
+    const errMsg = `Backend process error: ${error.message}
+${error.stack}
+`;
+    logStream.write(errMsg);
+    console.error(errMsg);
   });
   backendProcess.on("exit", (code) => {
-    console.log(`Backend process exited with code ${code}`);
+    const exitMsg = `Backend process exited with code ${code}
+`;
+    logStream.write(exitMsg);
+    console.log(exitMsg);
   });
 };
 const stopBackend = () => {
@@ -212,10 +292,34 @@ const stopBackend = () => {
     backendProcess = null;
   }
 };
+const waitForBackend = (port = 5e3, timeoutMs = 3e4) => {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const req = electron.net.request(`http://localhost:${port}`);
+      req.on("response", () => {
+        clearInterval(interval);
+        console.log(`✅ Backend is ready on port ${port}`);
+        resolve();
+      });
+      req.on("error", () => {
+        if (Date.now() - start >= timeoutMs) {
+          clearInterval(interval);
+          console.warn(`⚠️ Backend did not start within ${timeoutMs}ms — opening window anyway`);
+          resolve();
+        }
+      });
+      req.end();
+    }, 500);
+  });
+};
 console.log("🚀 Electron app starting...");
-electron.app.whenReady().then(() => {
-  console.log("📱 App ready, starting backend and creating window...");
+electron.app.whenReady().then(async () => {
+  console.log("📱 App ready, starting backend...");
   startBackend();
+  console.log("⏳ Waiting for backend to be ready...");
+  await waitForBackend(5e3, 3e4);
+  console.log("🖥️ Creating window...");
   createWindow();
   electron.app.on("activate", () => {
     if (electron.BrowserWindow.getAllWindows().length === 0) {
@@ -233,15 +337,18 @@ electron.app.on("before-quit", () => {
   stopBackend();
 });
 let customDefaultPrinter = null;
-electron.ipcMain.handle("set-default-printer", async (event, printerName) => {
-  try {
-    customDefaultPrinter = printerName;
-    return { success: true, printer: printerName };
-  } catch (error) {
-    console.error("Error setting default printer:", error);
-    return { success: false, error: String(error) };
+electron.ipcMain.handle(
+  "set-default-printer",
+  async (event, printerName) => {
+    try {
+      customDefaultPrinter = printerName;
+      return { success: true, printer: printerName };
+    } catch (error) {
+      console.error("Error setting default printer:", error);
+      return { success: false, error: String(error) };
+    }
   }
-});
+);
 electron.ipcMain.handle("get-default-printer", async (event) => {
   return customDefaultPrinter;
 });
@@ -266,90 +373,107 @@ electron.ipcMain.handle("get-printers", async () => {
     return [];
   }
 });
-electron.ipcMain.handle("print-receipt", async (event, receiptData) => {
-  try {
-    const printerName = customDefaultPrinter;
-    const printWindow = new electron.BrowserWindow({
-      width: 225,
-      // Approx 59mm width (58mm + buffer)
-      height: 600,
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true
-      }
-    });
-    const receiptHTML = generateReceiptHTML(receiptData);
+electron.ipcMain.handle(
+  "print-receipt",
+  async (event, receiptData) => {
     try {
-      const fs2 = require("fs");
-      const debugPath = path.join(electron.app.getPath("userData"), "last_receipt_debug.html");
-      fs2.writeFileSync(debugPath, receiptHTML);
-      console.log("📝 Saved debug receipt HTML to:", debugPath);
-    } catch (e) {
-      console.error("⚠️ Failed to save debug receipt HTML:", e);
-    }
-    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(receiptHTML)}`);
-    const printOptions = {
-      silent: false,
-      // Show print dialog so user can verify settings
-      printBackground: true,
-      margins: {
-        marginType: "custom",
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0
-      },
-      pageSize: {
-        width: 58e3,
-        // 58mm in micrometers
-        height: 2e5
-        // Auto height
+      const printerName = customDefaultPrinter;
+      const printWindow = new electron.BrowserWindow({
+        width: 225,
+        // Approx 59mm width (58mm + buffer)
+        height: 600,
+        show: false,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      const receiptHTML = generateReceiptHTML(receiptData);
+      try {
+        const fs2 = require("fs");
+        const debugPath = path.join(
+          electron.app.getPath("userData"),
+          "last_receipt_debug.html"
+        );
+        fs2.writeFileSync(debugPath, receiptHTML);
+        console.log("📝 Saved debug receipt HTML to:", debugPath);
+      } catch (e) {
+        console.error("⚠️ Failed to save debug receipt HTML:", e);
       }
-    };
-    if (printerName) {
-      printOptions.deviceName = printerName;
+      await printWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(receiptHTML)}`
+      );
+      const printOptions = {
+        silent: false,
+        // Show print dialog so user can verify settings
+        printBackground: true,
+        margins: {
+          marginType: "custom",
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0
+        },
+        pageSize: {
+          width: 58e3,
+          // 58mm in micrometers
+          height: 2e5
+          // Auto height
+        }
+      };
+      if (printerName) {
+        printOptions.deviceName = printerName;
+      }
+      await printWindow.webContents.print(
+        printOptions,
+        (success, failureReason) => {
+          printWindow.close();
+          if (success) {
+          } else {
+            console.error("❌ Print failed:", failureReason);
+          }
+        }
+      );
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Print error:", error);
+      return { success: false, error: error.message };
     }
-    await printWindow.webContents.print(printOptions, (success, failureReason) => {
-      printWindow.close();
-      if (success) {
+  }
+);
+electron.ipcMain.handle(
+  "print-thermal",
+  async (event, data) => {
+    try {
+      const targetPrinter = data.printerName || customDefaultPrinter;
+      if (targetPrinter) {
+      }
+      const response = await fetch(
+        "http://localhost:5000/api/printers/print-raw",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+            // Note: In production, you'd need to handle auth token here
+          },
+          body: JSON.stringify({
+            text: data.text,
+            printerName: targetPrinter
+          })
+        }
+      );
+      const result = await response.json();
+      if (result.success) {
       } else {
-        console.error("❌ Print failed:", failureReason);
+        console.error("❌ RAW thermal print failed:", result.error);
       }
-    });
-    return { success: true };
-  } catch (error) {
-    console.error("❌ Print error:", error);
-    return { success: false, error: error.message };
-  }
-});
-electron.ipcMain.handle("print-thermal", async (event, data) => {
-  try {
-    const targetPrinter = data.printerName || customDefaultPrinter;
-    if (targetPrinter) {
+      return result;
+    } catch (error) {
+      console.error("❌ RAW thermal print error:", error);
+      return { success: false, error: error.message };
     }
-    const response = await fetch("http://localhost:5000/api/printers/print-raw", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-        // Note: In production, you'd need to handle auth token here
-      },
-      body: JSON.stringify({
-        text: data.text,
-        printerName: targetPrinter
-      })
-    });
-    const result = await response.json();
-    if (result.success) {
-    } else {
-      console.error("❌ RAW thermal print failed:", result.error);
-    }
-    return result;
-  } catch (error) {
-    console.error("❌ RAW thermal print error:", error);
-    return { success: false, error: error.message };
   }
-});
+);
 function generateReceiptHTML(receiptData) {
   var _a;
   const formattedDate = new Date(receiptData.date).toLocaleString("en-NG", {
@@ -465,7 +589,8 @@ function generateReceiptHTML(receiptData) {
       
       <!-- Items List -->
       <div style="width: 100%;">
-        ${receiptData.items.map((item) => `
+        ${receiptData.items.map(
+    (item) => `
           <div class="item-row">
             <div class="item-name">${item.name}</div>
             <div class="item-data">
@@ -473,7 +598,8 @@ function generateReceiptHTML(receiptData) {
               <span class="bold">${item.total.toFixed(0)}</span>
             </div>
           </div>
-        `).join("")}
+        `
+  ).join("")}
       </div>
       
       <div class="line"></div>

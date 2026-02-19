@@ -59,24 +59,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(false)
   }, [])
 
-  const verifyToken = async (accessToken: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      })
+  /**
+   * Attempt to verify the token, retrying up to `maxAttempts` times with a
+   * delay between each try.  This handles the packaged-build race condition
+   * where the React app loads before the Express backend is fully ready.
+   */
+  const verifyToken = async (accessToken: string, maxAttempts = 4, delayMs = 2000) => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        })
 
-      if (!response.ok) {
-        // Token is invalid, try to refresh
-        const refreshed = await refreshToken()
-        if (!refreshed) {
+        if (!response.ok) {
+          // Token is invalid — try to refresh, then give up
+          const refreshed = await refreshToken()
+          if (!refreshed) logout()
+        }
+        return; // success, exit loop
+      } catch (error) {
+        const isLastAttempt = attempt === maxAttempts;
+        if (isLastAttempt) {
+          console.error('Token verification failed after all retries:', error)
           logout()
+        } else {
+          console.warn(`Token verify attempt ${attempt} failed — backend may still be starting. Retrying in ${delayMs}ms...`)
+          await new Promise(res => setTimeout(res, delayMs))
         }
       }
-    } catch (error) {
-      console.error('Token verification failed:', error)
-      logout()
     }
   }
 
